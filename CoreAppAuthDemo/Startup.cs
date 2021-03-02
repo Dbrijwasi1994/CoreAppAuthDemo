@@ -32,13 +32,14 @@ namespace CoreAppAuthDemo
             services.AddControllersWithViews();
             services.ConfigureCors();
             services.ConfigureIdentityContext();
+            services.ConfigureRepositories();
             services.AddDbContext<ApplicationDataContext>(opts => opts.UseSqlServer(Configuration.GetSection("ConnectionStrings").GetSection("sqlConnection").Value));
             services.AddAutoMapper(typeof(Startup));
             services.ConfigureApplicationCookie(x => x.LoginPath = "/Account/Login");            
             services.AddScoped<IUserClaimsPrincipalFactory<User>, CustomClaimsFactory>();
             services.ConfigureEmailSettings(Configuration);
             services.ConfigureGoogleOAuth(Configuration);
-            services.ConfigureAzureAdOAuth(Configuration);
+            services.ConfigureAzureAdOAuth(Configuration);            
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -56,7 +57,6 @@ namespace CoreAppAuthDemo
             }
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();

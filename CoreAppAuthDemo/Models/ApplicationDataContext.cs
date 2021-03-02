@@ -24,5 +24,6 @@ namespace CoreAppAuthDemo.Models
         }
 
         public DbSet<Employee> Employees { get; set; }
+        //public DbSet<AspNetUsers> AspNetUsers { get; set; }
     }
 }

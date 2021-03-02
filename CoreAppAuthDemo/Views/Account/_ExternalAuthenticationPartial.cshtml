@@ -23,7 +23,14 @@
                         <p>
                             @foreach (var provider in providers)
                             {
-                                <input type="submit" class="btn btn-info" value="@provider.Name" name="provider" />
+                                if (provider.Name.Equals("OpenIdConnect"))
+                                {
+                                    <input type="submit" class="btn btn-info" value="Azure AD" name="provider" />
+                                }
+                                else
+                                {
+                                    <input type="submit" class="btn btn-info" value="@provider.Name" name="provider" />
+                                }
                             }
                         </p>
                     </div>

@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using CoreAppAuthDemo.Models;
+using CoreAppAuthDemo.Repositories;
 using EmailService;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,13 +17,17 @@ namespace CoreAppAuthDemo.Controllers
     public class AccountController : Controller
     {
         private readonly IMapper _mapper;
+        private readonly ILogger<AccountController> _logger;
+        private readonly IApplicationUserDetailsRepo _appUserDetailsInfo;
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
         private readonly IEmailSender _emailSender;
 
-        public AccountController(IMapper mapper, UserManager<User> userManager, SignInManager<User> signInManager, IEmailSender emailSender)
+        public AccountController(IMapper mapper, ILogger<AccountController> logger, IApplicationUserDetailsRepo appUserDetailsInfo, UserManager<User> userManager, SignInManager<User> signInManager, IEmailSender emailSender)
         {
             _mapper = mapper;
+            _logger = logger;
+            _appUserDetailsInfo = appUserDetailsInfo;
             _userManager = userManager;
             _signInManager = signInManager;
             _emailSender = emailSender;
@@ -101,7 +107,19 @@ namespace CoreAppAuthDemo.Controllers
             var result = await _signInManager.PasswordSignInAsync(userModel.Email, userModel.Password, userModel.RememberMe, true);
             if (result.RequiresTwoFactor)
             {
-                return RedirectToAction(nameof(LoginTwoFactor), new { userModel.Email, userModel.RememberMe, returnUrl });
+                var twoFactorAuthMethod = _appUserDetailsInfo.GetUserTwoFactorAuthMethod(userModel.Email);
+                if (twoFactorAuthMethod.Equals("EmailOTP", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RedirectToAction(nameof(LoginTwoFactor), new { userModel.Email, userModel.RememberMe, twoFactorAuthMethod, returnUrl });
+                }
+                if (twoFactorAuthMethod.Equals("PhoneOTP", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RedirectToAction(nameof(LoginTwoFactor), new { userModel.Email, userModel.RememberMe, twoFactorAuthMethod, returnUrl });
+                }
+                if (twoFactorAuthMethod.Equals("TOTP", StringComparison.OrdinalIgnoreCase))
+                {
+                    return RedirectToAction(nameof(LoginTwoFactorTOTP), new { userModel.Email, userModel.RememberMe, returnUrl });
+                }
             }
             if (result.Succeeded)
             {
@@ -129,7 +147,7 @@ namespace CoreAppAuthDemo.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> LoginTwoFactor(string email, bool rememberMe, string returnUrl = null)
+        public async Task<IActionResult> LoginTwoFactor(string email, bool rememberMe, string twoFactorAuthMethod, string returnUrl = null)
         {
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null)
@@ -174,6 +192,64 @@ namespace CoreAppAuthDemo.Controllers
             else
             {
                 ModelState.AddModelError("LoginError", "Invalid Login Attempt");
+                return View();
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> LoginTwoFactorTOTP(string email, bool rememberMe, string returnUrl = null)
+        {
+            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+            if (user == null)
+            {
+                return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = "Unable to load two-factor authentication user." });
+            }
+            ViewData["ReturnUrl"] = returnUrl;
+            return View(new LoginTwoFactorTOTPModel { ReturnUrl = returnUrl, RememberMe = rememberMe });
+        }
+
+        //[HttpGet]
+        //public async Task<IActionResult> LoginTwoFactorTOTP(string email, bool rememberMe, string returnUrl = null)
+        //{
+        //    var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+        //    if (user == null)
+        //    {
+        //        return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = "Unable to load two-factor authentication user." });
+        //    }
+        //    ViewData["ReturnUrl"] = returnUrl;
+        //    return View(new LoginTwoFactorTOTPModel { ReturnUrl = returnUrl, RememberMe = rememberMe });
+        //}
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LoginTwoFactorTOTP(LoginTwoFactorTOTPModel loginTwoFactorTOTPModel)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View();
+            }
+            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+            if (user == null)
+            {
+                return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = "Unable to load two-factor authentication user." });
+            }
+
+            var authenticatorCode = loginTwoFactorTOTPModel.Input.TwoFactorCode.Replace(" ", string.Empty).Replace("-", string.Empty);
+            var result = await _signInManager.TwoFactorAuthenticatorSignInAsync(authenticatorCode, loginTwoFactorTOTPModel.RememberMe, loginTwoFactorTOTPModel.Input.RememberMachine);
+            if(result.Succeeded)
+            {
+                _logger.LogInformation("User with ID '{UserId}' logged in with 2fa.", user.Id);
+                return RedirectToLocal(loginTwoFactorTOTPModel.ReturnUrl);
+            }
+            else if (result.IsLockedOut)
+            {
+                ModelState.AddModelError("LoginError", "The account is locked out due to multiple invalid login attempts.");
+                return View();
+            }
+            else
+            {
+                _logger.LogWarning("Invalid authenticator code entered for user with ID '{UserId}'.", user.Id);
+                ModelState.AddModelError(string.Empty, "Invalid authenticator code.");
                 return View();
             }
         }
@@ -249,7 +325,8 @@ namespace CoreAppAuthDemo.Controllers
         [ValidateAntiForgeryToken]
         public IActionResult ExternalLogin(string provider, string returnUrl = null)
         {
-            var redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Account", new { returnUrl });
+            provider = provider.Equals("Azure AD") ? "OpenIdConnect" : provider;
+            var redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Account", new { returnUrl, area = "Identity" });
             var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
             return Challenge(properties, provider);
         }
@@ -257,27 +334,35 @@ namespace CoreAppAuthDemo.Controllers
         [HttpGet]
         public async Task<IActionResult> ExternalLoginCallback(string returnUrl = null)
         {
-            var info = await _signInManager.GetExternalLoginInfoAsync();
-            if (info == null)
+            try
             {
-                return RedirectToAction(nameof(Login));
-            }
+                var info = await _signInManager.GetExternalLoginInfoAsync();
+                if (info == null)
+                {
+                    return RedirectToAction(nameof(Login));
+                }
 
-            var signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
-            if (signInResult.Succeeded)
-            {
-                return RedirectToLocal(returnUrl);
+                var signInResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
+                if (signInResult.Succeeded)
+                {
+                    return RedirectToLocal(returnUrl);
+                }
+                if (signInResult.IsLockedOut)
+                {
+                    return RedirectToAction(nameof(ForgotPassword));
+                }
+                else
+                {
+                    ViewData["ReturnUrl"] = returnUrl;
+                    ViewData["Provider"] = info.LoginProvider;
+                    var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+                    return View("ExternalLogin", new ExternalLoginModel { Email = email });
+                }
             }
-            if (signInResult.IsLockedOut)
+            catch (Exception ex)
             {
-                return RedirectToAction(nameof(ForgotPassword));
-            }
-            else
-            {
-                ViewData["ReturnUrl"] = returnUrl;
-                ViewData["Provider"] = info.LoginProvider;
-                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
-                return View("ExternalLogin", new ExternalLoginModel { Email = email });
+                Console.WriteLine(ex.Message);
+                return RedirectToAction(nameof(Login));
             }
         }
 
@@ -339,9 +424,9 @@ namespace CoreAppAuthDemo.Controllers
         }
 
         [HttpGet]
-        public IActionResult Error()
+        public IActionResult Error(ErrorModel errorModel = null)
         {
-            return View();
+            return View(errorModel);
         }
 
         private IActionResult RedirectToLocal(string returnUrl)

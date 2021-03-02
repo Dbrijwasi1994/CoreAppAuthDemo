@@ -1,17 +1,26 @@
 ﻿using CoreAppAuthDemo.CustomTokenProviders;
 using CoreAppAuthDemo.CustomValdiators;
 using CoreAppAuthDemo.Models;
+using CoreAppAuthDemo.Repositories;
+using CoreAppAuthDemo.Services;
 using EmailService;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace CoreAppAuthDemo.Extensions
@@ -25,6 +34,11 @@ namespace CoreAppAuthDemo.Extensions
                 options.AddPolicy("CorsPolicy",
                 builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
             });
+        }
+
+        public static void ConfigureRepositories(this IServiceCollection services)
+        {
+            services.AddScoped<IApplicationUserDetailsRepo, ApplicationUserDetailsService>();
         }
 
         public static void ConfigureIdentityContext(this IServiceCollection services)
@@ -76,7 +90,23 @@ namespace CoreAppAuthDemo.Extensions
 
         public static void ConfigureAzureAdOAuth(this IServiceCollection services, IConfiguration Configuration)
         {
-            services.AddMicrosoftIdentityWebAppAuthentication(Configuration);
+            services.AddRazorPages().AddMicrosoftIdentityUI();
+            services.AddAuthentication().AddOpenIdConnect(options =>
+            {
+                var azureAdAuth = Configuration.GetSection("Authentication:AzureAd");
+                options.ClientId = azureAdAuth["ClientId"];
+                options.Authority = $"{azureAdAuth["Instance"]}/{azureAdAuth["TenantId"]}";
+                options.ResponseType = OpenIdConnectResponseType.CodeIdToken;
+                options.ClientSecret = azureAdAuth["ClientSecret"];
+                options.CallbackPath = azureAdAuth["CallbackPath"];
+                options.SignedOutCallbackPath = azureAdAuth["SignedOutCallbackPath"];
+                options.SignInScheme = IdentityConstants.ExternalScheme;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(azureAdAuth["ClientSecret"])),
+                    ValidateIssuer = false
+                };
+            });
         }
     }
 }
