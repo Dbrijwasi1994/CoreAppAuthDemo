@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
 namespace CoreAppAuthDemo.Controllers
@@ -22,8 +23,9 @@ namespace CoreAppAuthDemo.Controllers
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
         private readonly IEmailSender _emailSender;
+        private readonly UrlEncoder _urlEncoder;
 
-        public AccountController(IMapper mapper, ILogger<AccountController> logger, IApplicationUserDetailsRepo appUserDetailsInfo, UserManager<User> userManager, SignInManager<User> signInManager, IEmailSender emailSender)
+        public AccountController(IMapper mapper, ILogger<AccountController> logger, IApplicationUserDetailsRepo appUserDetailsInfo, UserManager<User> userManager, SignInManager<User> signInManager, IEmailSender emailSender, UrlEncoder urlEncoder)
         {
             _mapper = mapper;
             _logger = logger;
@@ -31,6 +33,7 @@ namespace CoreAppAuthDemo.Controllers
             _userManager = userManager;
             _signInManager = signInManager;
             _emailSender = emailSender;
+            _urlEncoder = urlEncoder;
         }
 
         [HttpGet]
@@ -197,6 +200,49 @@ namespace CoreAppAuthDemo.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> EnableTotpAuthenticator()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = $"Unable to load user with ID '{_userManager.GetUserId(User)}'." });
+            }
+            EnableTOTPAuthenticatorModel authenticatorModel = await LoadSharedKeyAndQrCodeUriAsync(user);
+            return View(authenticatorModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EnableTotpAuthenticator(EnableTOTPAuthenticatorModel authenticatorModel)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = $"Unable to load user with ID '{_userManager.GetUserId(User)}'." });
+            }
+            if (!ModelState.IsValid)
+            {
+                EnableTOTPAuthenticatorModel authModel = await LoadSharedKeyAndQrCodeUriAsync(user);
+                return View(authModel);
+            }
+
+            var verificationCode = authenticatorModel.Input.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+            var is2faTokenValid = await _userManager.VerifyTwoFactorTokenAsync(user, _userManager.Options.Tokens.AuthenticatorTokenProvider, verificationCode);
+            if (!is2faTokenValid)
+            {
+                ModelState.AddModelError("Input.Code", "Verification code is invalid.");
+                EnableTOTPAuthenticatorModel authModel = await LoadSharedKeyAndQrCodeUriAsync(user);
+                return View();
+            }
+
+            await _userManager.SetTwoFactorEnabledAsync(user, true);
+            var userId = await _userManager.GetUserIdAsync(user);
+            _logger.LogInformation("User with ID '{UserId}' has enabled 2FA with an authenticator app.", userId);
+            authenticatorModel.StatusMessage = "Your authenticator app has been verified.";
+            return RedirectToAction("Login", "Account");
+        }
+
+        [HttpGet]
         public async Task<IActionResult> LoginTwoFactorTOTP(string email, bool rememberMe, string returnUrl = null)
         {
             var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
@@ -207,18 +253,6 @@ namespace CoreAppAuthDemo.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             return View(new LoginTwoFactorTOTPModel { ReturnUrl = returnUrl, RememberMe = rememberMe });
         }
-
-        //[HttpGet]
-        //public async Task<IActionResult> LoginTwoFactorTOTP(string email, bool rememberMe, string returnUrl = null)
-        //{
-        //    var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
-        //    if (user == null)
-        //    {
-        //        return View(nameof(Error), new ErrorModel { ErrorId = Guid.NewGuid().ToString(), ErrorMessage = "Unable to load two-factor authentication user." });
-        //    }
-        //    ViewData["ReturnUrl"] = returnUrl;
-        //    return View(new LoginTwoFactorTOTPModel { ReturnUrl = returnUrl, RememberMe = rememberMe });
-        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -435,6 +469,46 @@ namespace CoreAppAuthDemo.Controllers
                 return Redirect(returnUrl);
             else
                 return RedirectToAction(nameof(HomeController.Index), "Home");
+        }
+
+        private async Task<EnableTOTPAuthenticatorModel> LoadSharedKeyAndQrCodeUriAsync(User user)
+        {
+            EnableTOTPAuthenticatorModel authenticatorModel = new EnableTOTPAuthenticatorModel();
+            // Load the authenticator key & QR code URI to display on the form
+            var unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+            if (string.IsNullOrEmpty(unformattedKey))
+            {
+                await _userManager.ResetAuthenticatorKeyAsync(user);
+                unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+            }
+
+            authenticatorModel.SharedKey = FormatKey(unformattedKey);
+
+            var email = await _userManager.GetEmailAsync(user);
+            authenticatorModel.AuthenticatorUri = GenerateQrCodeUri(email, unformattedKey);
+            return authenticatorModel;
+        }
+
+        private string FormatKey(string unformattedKey)
+        {
+            var result = new System.Text.StringBuilder();
+            int currentPosition = 0;
+            while (currentPosition + 4 < unformattedKey.Length)
+            {
+                result.Append(unformattedKey.Substring(currentPosition, 4)).Append(" ");
+                currentPosition += 4;
+            }
+            if (currentPosition < unformattedKey.Length)
+            {
+                result.Append(unformattedKey.Substring(currentPosition));
+            }
+
+            return result.ToString().ToLowerInvariant();
+        }
+
+        private string GenerateQrCodeUri(string email, string unformattedKey)
+        {
+            return string.Format(EnableTOTPAuthenticatorModel.AuthenticatorUriFormat, _urlEncoder.Encode("IdentityServer"), _urlEncoder.Encode(email), unformattedKey);
         }
     }
 }
