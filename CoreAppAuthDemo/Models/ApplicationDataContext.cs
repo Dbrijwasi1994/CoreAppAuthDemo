@@ -19,11 +19,12 @@ namespace CoreAppAuthDemo.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<PumpMasterData>(entity => entity.HasKey(x => x.PumpModel));
             modelBuilder.ApplyConfiguration(new EmployeeConfiguration());
             modelBuilder.ApplyConfiguration(new RoleConfiguration());
         }
 
         public DbSet<Employee> Employees { get; set; }
-        //public DbSet<AspNetUsers> AspNetUsers { get; set; }
+        public DbSet<PumpMasterData> PumpMasterData { get; set; }
     }
 }

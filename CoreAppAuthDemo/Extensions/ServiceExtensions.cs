@@ -39,6 +39,15 @@ namespace CoreAppAuthDemo.Extensions
         public static void ConfigureRepositories(this IServiceCollection services)
         {
             services.AddScoped<IApplicationUserDetailsRepo, ApplicationUserDetailsService>();
+            services.AddScoped<IMasterDataServiceRepo, MasterDataService>();
+        }
+
+        public static void ConfigureJsonOptions(this IServiceCollection services)
+        {
+            services.AddMvc().AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.DefaultContractResolver();
+            });
         }
 
         public static void ConfigureIdentityContext(this IServiceCollection services)

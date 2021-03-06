@@ -10,7 +10,10 @@
     <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
     @if (SignInManager.IsSignedIn(User))
     {
-        @Html.ActionLink("Enable Authenticator", "EnableTotpAuthenticator", "Account")
-        <button type="submit" class="btn btn-primary" asp-action="@Url.Action("EnableTotpAuthenticator", "Account")" formmethod="get">Enable Authenticator</button>
+        @*@Html.ActionLink("Enable Authenticator", "EnableTotpAuthenticator", "Account", htmlAttributes: new { @class = "btn btn-primary" })
+        <hr />*@
+        @Html.ActionLink("Pump Master Data", "PumpMasterData", "Home", htmlAttributes: new { @class = "btn btn-primary" })
+        <hr />
+        @Html.ActionLink("Process Parameters", "ProcessParameters", "Home", htmlAttributes: new { @class = "btn btn-primary" })
     }
 </div>

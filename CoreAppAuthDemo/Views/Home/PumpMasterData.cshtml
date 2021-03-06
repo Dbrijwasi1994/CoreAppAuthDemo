@@ -1,0 +1,52 @@
+﻿@model IEnumerable<PumpMasterData>
+@{
+    ViewData["Title"] = "Pump Master Data";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<hr />
+
+@{
+    var ddPckType = new List<string> { "AG-OE", "AM", "EPX", "IHY" };
+    var numericParams = new { decimals = 0, value = 2 };
+    var ddPumpType = new List<string> { "Solo", "Tandem" };
+    var ddBoxDestination = new List<string> { "DOMESTIC", "EXPORT" };
+}
+
+<ejs-grid id="PumpMasterDataGrid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowPdfExport="true" allowExcelExport="true" toolbar="@(new List<string>() { "Search", "PdfExport", "ExcelExport", "Add", "Edit", "Delete", "Cancel", "Update"})" toolbarClick="gridToolbarClick">
+    @*<e-data-manager insertUrl="/Home/Insert" updateUrl="/Home/Update" removeUrl="/Home/Delete" adaptor="UrlAdaptor"></e-data-manager>*@
+    <e-grid-pagesettings pageSize="16"></e-grid-pagesettings>
+    <e-grid-filtersettings type="Menu"></e-grid-filtersettings>
+    <e-grid-editsettings allowAdding="true" allowDeleting="true" allowEditing="true" showConfirmDialog="true" showDeleteConfirmDialog="true" mode="Dialog"></e-grid-editsettings>
+    <e-grid-searchsettings fields="@(new string[] { "PumpModel"})" operator="contains" key="" ignoreCase="true"></e-grid-searchsettings>
+    <e-grid-columns>
+        <e-grid-column field="PumpModel" headerText="Pump Model" isPrimaryKey="true" allowEditing="false" textAlign="Right" width="120"></e-grid-column>
+        <e-grid-column field="CustomerModel" headerText="Customer Model" textAlign="Center"></e-grid-column>
+        <e-grid-column field="CustomerName" headerText="Customer Name" textAlign="Center"></e-grid-column>
+        <e-grid-column field="SalesUnit" headerText="Sales Unit" textAlign="Center"></e-grid-column>
+        <e-grid-column field="PackagingType" headerText="Packaging Type" edit=ddPckType editType="dropdownedit" textAlign="Center"></e-grid-column>
+        <e-grid-column field="PackingBoxNumber" headerText="Packing Box Number" textAlign="Center"></e-grid-column>
+        <e-grid-column field="PerBoxPumpQty" headerText="Pump Qty. Per Box" textAlign="Center" editType="numericedit" edit=numericParams></e-grid-column>
+        <e-grid-column field="PumpType" headerText="Pump Type" textAlign="Center" edit=ddPumpType editType="dropdownedit"></e-grid-column>
+        <e-grid-column field="BoxDestination" headerText="Box Destination" textAlign="Center" edit=ddBoxDestination editType="dropdownedit"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>
+
+<script>
+
+    function gridToolbarClick(args) {
+        var gridObj = document.getElementById("PumpMasterDataGrid").ej2_instances[0];
+        if (args.item.id === 'PumpMasterDataGrid_pdfexport') {
+            var exportProperties = {
+                fileName: `PumpMasterData${new Date().getMilliseconds()}.pdf`
+            };
+            gridObj.pdfExport(exportProperties);
+        }
+        if (args.item.id === 'PumpMasterDataGrid_excelexport') {
+            gridObj.excelExport();
+        }
+    }
+
+</script>
+

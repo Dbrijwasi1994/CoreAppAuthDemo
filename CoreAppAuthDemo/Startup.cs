@@ -33,6 +33,7 @@ namespace CoreAppAuthDemo
             services.ConfigureCors();
             services.ConfigureIdentityContext();
             services.ConfigureRepositories();
+            services.ConfigureJsonOptions();
             services.AddDbContext<ApplicationDataContext>(opts => opts.UseSqlServer(Configuration.GetSection("ConnectionStrings").GetSection("sqlConnection").Value));
             services.AddAutoMapper(typeof(Startup));
             services.ConfigureApplicationCookie(x => x.LoginPath = "/Account/Login");            

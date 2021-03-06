@@ -1,0 +1,130 @@
+﻿@model IEnumerable<ProcessParameterData>
+@{
+    ViewData["Title"] = "Process Parameters Data";
+}
+
+<style type="text/css">
+
+    #containerProcessParams {
+        display: block;
+        margin: auto;
+        border: 1px solid #dddddd;
+        border-radius: 3px;
+    }
+
+        #containerProcessParams .count {
+            float: right;
+        }
+
+        #containerProcessParams .e-list-header {
+            padding: 0;
+        }
+
+        #containerProcessParams .headerContainer {
+            width: 350px;
+            height: 48px;
+            line-height: 48px;
+            background: rgb(2, 120, 215);
+            color: white;
+            margin-bottom: 3px;
+        }
+
+    .headerContainer .processParamHeader {
+        margin-left: 20px;
+        font-weight: 500;
+        font-size: 22px;
+    }
+
+    .headerContainer #add,
+    .headerContainer #sort,
+    .headerContainer #search {
+        float: right;
+        margin-right: 15px;
+        margin-top: 7px;
+        background: white;
+        color: black
+    }
+
+    .headerContainer .e-search-icon::before {
+        content: '\e961';
+        color: lightslategray;
+    }
+
+
+    .headerContainer .e-add-icon::before {
+        content: '\e823';
+    }
+
+    .headerContainer .e-sort-icon::before {
+        content: '\e840';
+    }
+
+    .template1 tr th {
+        padding: 6px;
+        font-size: 16px;
+    }
+
+    .template1 tr td {
+        padding: 6px;
+    }
+
+    .e-listview .e-list-item {
+        height: 250px;
+        display: inline-block;
+    }
+
+    .main-div {
+        box-shadow: 0px 0px 10px #2b2828ed;
+    }
+
+        .main-div table tr th {
+            background-color: #d4d4d491;
+            color: black;
+        }
+
+    .main-div-table-shadow table {
+        box-shadow: 0px 0px 10px #2b2828ed;
+    }
+
+        .main-div-table-shadow table tr th {
+            background-color: #6c7884;
+        }
+</style>
+
+<h1>@ViewData["Title"]</h1>
+
+<hr />
+
+@{
+    var headerTemplate = "<div class='headerContainer'><span class='processParamHeader'>Process Params</span>" + "<button id='search'></button><button id='add'></button><button id='sort'></button></div>";
+    var listTemplate = "<div style='padding: 10px;'><div class='main-div' style='display: inline-block; background-color: ${BackColor}; width: 300px; border-radius: 10px; margin: 5px 5px; height: 155px;'><table class='template1' style='width: 100%; text-align: center; display: ${Template1Visibility};'>" +
+       "<tr><th colspan='4' style='border-top-left-radius: 10px; border-top-right-radius: 10px; text-align: center; position: relative'>" +
+       "<label style='overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 225px; width: 225px; color: black; font-size: 16px' title=${HeaderName};>${HeaderName}<label>" +
+       "<a id='linkTroubleshoot' style='position: absolute; top: 3px; right: 8px; color: white; font-size: 17px; background-color: red; padding: 2px 8px; border-radius: 12px;visibility: ${TrubleshootIconVisibility};'>T</a></th></tr>" +
+       "<tr><td colspan='4'><label style='background: white; padding: 1px 40px; color: black; font-size: 20px;'>${Value}</label></td></tr>" +
+       "<tr><td colspan='4' style='padding: 0px'><label style='font-size: 19px; margin: 0px; color: black;'>${ChartType}</label></td></tr>" +
+       "<tr><td style='text-align: right; font-size: 19px; color: black'>Hi</td><td><label style='background: white; padding: 1px 25px; color: black; font-size: 19px;'>${HighValue}></label>" +
+       "</td><td style='text-align: right; font-size: 19px; color: black'>Lo</td><td><label style='background: white; padding: 1px 25px; color: black; font-size: 19px;'>${LowValue}</label>" +
+       "</td></tr></table><table class='template1' style='width: 100%; text-align: center; display: ${Template2Visibility};'><tr>" +
+       "<th colspan='4' style='border-top-left-radius: 10px; border-top-right-radius: 10px; text-align: center'>${HeaderName}" +
+       "<a id='linkTroubleshoot1' style='position: absolute; top: 3px; right: 24px; color: white; font-size: 17px; background-color: red; padding: 2px 8px; border-radius: 12px;'>T</a>" +
+       "</th></tr><tr style='height: 110px'><td colspan='4'><label style='background: white; padding: 1px 40px; color: black; font-size: 20px;'>${Value}</label></td></tr></table></div></div>";
+    var containerTemplate = "<div style = 'border: 1px solid royalblue; border-radius: 10px; display: table-cell;' class = 'machine-div'>" +
+       "<div style='padding: 3px 20px; border-bottom: 1px solid royalblue; position: relative'><span style='font-size: 18px;'>${items[0].MachineID}</span>" +
+       "<a id='linkTroubleshootMachine' style='position: absolute; top: 3px; color: white; font-size: 15px; background-color: red; padding: 2px 8px; border-radius: 12px; margin-left: 20px; font-weight: bold; text-decoration: none;'>T</a>" +
+       "<a id='linkLaunchToGraphView' style='position: relative; top: 0px; left: 40px; color: white; font-size: 15px; background-color: green; padding: 2px 8px; border-radius: 12px; margin-left: 20px; font-weight: bold; text-decoration: none;'>G</a><span class='count'> ${items.length} Item(s)</span></div>";
+}
+
+<div class="container-fluid" style="height:90%">
+    <ejs-listview id="containerProcessParams" dataSource="@Model" showHeader="true" headerTemplate="@headerTemplate" template="@listTemplate" groupTemplate="@containerTemplate" actionComplete="renderHeaderButtons">
+        <e-listview-fieldsettings groupBy="MachineID" tooltip="Machine ID"></e-listview-fieldsettings>
+    </ejs-listview>
+</div>
+
+<script>
+    function renderHeaderButtons() {
+        ['search', 'sort', 'add'].forEach((item) => {
+            new ej.buttons.Button({ iconCss: `e-icons e-${item}-icon`, cssClass: 'e-small e-round', isPrimary: true }, `#${item}`)
+        });
+    }
+</script>
